@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurocartographer"
+version = "0.1.0"
+description = "AI-native open neuroscience dataset discovery and reproducible starter-analysis generator."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "NeuroCartographer contributors"}]
+dependencies = []
+
+[project.scripts]
+neurocartographer = "neurocartographer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
