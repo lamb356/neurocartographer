@@ -1,0 +1,49 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      - name: Run tests
+        run: python -m pytest
+      - name: Offline CLI smoke
+        run: |
+          neurocartographer \
+            "Find mouse visual cortex calcium imaging datasets with behavior" \
+            --offline \
+            --execute-notebook \
+            --out /tmp/neurocartographer-ci-smoke \
+            --limit 3 \
+            --json
+      - name: Installed target smoke
+        run: |
+          tmpdir=$(mktemp -d)
+          python -m pip install --no-deps --target "$tmpdir" .
+          PYTHONPATH="$tmpdir" python -m neurocartographer \
+            "human EEG resting state dataset" \
+            --offline \
+            --execute-notebook \
+            --out /tmp/neurocartographer-ci-pack-smoke \
+            --limit 2 \
+            --json

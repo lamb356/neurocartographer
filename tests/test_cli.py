@@ -31,4 +31,6 @@ def test_cli_offline_end_to_end(tmp_path: Path):
     assert "DANDI:000728" in completed.stdout
     assert (output_dir / "starter_analysis.ipynb").exists()
     manifest = json.loads((output_dir / "run_manifest.json").read_text())
-    assert manifest["artifact_count"] == 5
+    assert manifest["artifact_count"] == 7
+    assert "asset_inventory.md" in manifest["artifacts"]
+    assert "nwb_summary.md" in manifest["artifacts"]

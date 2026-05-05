@@ -16,6 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", default="runs/latest", help="Output directory for generated artifacts.")
     parser.add_argument("--limit", type=int, default=5, help="Maximum ranked candidates to keep.")
     parser.add_argument("--offline", action="store_true", help="Use deterministic built-in catalog only; no network calls.")
+    parser.add_argument("--execute-notebook", action="store_true", help="Run the generated starter notebook through the restricted local executor and write execution_report.json.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable summary JSON.")
     return parser
 
@@ -24,7 +25,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        result = run_pipeline(args.question, Path(args.out), offline=args.offline, limit=args.limit)
+        result = run_pipeline(
+            args.question,
+            Path(args.out),
+            offline=args.offline,
+            limit=args.limit,
+            execute_notebook=args.execute_notebook,
+        )
     except Exception as exc:
         parser.exit(2, f"neurocartographer: error: {exc}\n")
 

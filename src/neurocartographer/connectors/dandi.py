@@ -4,7 +4,8 @@ import json
 import urllib.parse
 import urllib.request
 
-from neurocartographer.models import DatasetCandidate, QuerySpec
+from neurocartographer.models import AssetInfo, DatasetCandidate, QuerySpec
+from neurocartographer.modalities import has_calcium_imaging_signal, modality_hint_from_path
 
 
 class DandiConnector:
@@ -21,10 +22,19 @@ class DandiConnector:
         term = query.search_terms[0] if query.search_terms else query.original_question
         params = urllib.parse.urlencode({"search": term, "page_size": str(min(max(limit * 5, limit), 50))})
         url = f"{self.api_base}/dandisets/?{params}"
-        request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "neurocartographer/0.1"})
+        request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "neurocartographer/0.2"})
         with urllib.request.urlopen(request, timeout=15) as response:  # nosec B310 - fixed HTTPS default, user-overridable for tests
             payload = json.loads(response.read().decode("utf-8"))
         return [_candidate_from_dandi(item) for item in _results(payload)]
+
+    def inspect_assets(self, candidate: DatasetCandidate, limit: int = 25) -> tuple[AssetInfo, ...]:
+        dandiset_id = candidate.identifier.replace("DANDI:", "", 1)
+        params = urllib.parse.urlencode({"page_size": str(max(1, min(limit, 100)))})
+        url = f"{self.api_base}/dandisets/{dandiset_id}/versions/draft/assets/?{params}"
+        request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "neurocartographer/0.2"})
+        with urllib.request.urlopen(request, timeout=20) as response:  # nosec B310 - fixed HTTPS default, user-overridable for tests
+            payload = json.loads(response.read().decode("utf-8"))
+        return parse_asset_payload(payload)
 
 
 def _results(payload: object) -> list[dict[str, object]]:
@@ -33,6 +43,31 @@ def _results(payload: object) -> list[dict[str, object]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     return []
+
+
+def parse_asset_payload(payload: object) -> tuple[AssetInfo, ...]:
+    return tuple(_asset_from_dandi(item) for item in _results(payload))
+
+
+def _asset_from_dandi(item: dict[str, object]) -> AssetInfo:
+    path = _first_text(item.get("path"), item.get("name"), item.get("filename"), "unknown")
+    blob = item.get("blob") if isinstance(item.get("blob"), dict) else {}
+    size = _first_int(item.get("size"), item.get("size_bytes"), blob.get("size"))
+    url = _first_text(item.get("download_url"), item.get("url"), item.get("contentUrl")) or None
+    lower = path.lower()
+    standard = "NWB" if lower.endswith(".nwb") else "unknown"
+    return AssetInfo(
+        path=path,
+        size_bytes=size,
+        url=url,
+        standard=standard,
+        modality_hint=_asset_modality_hint(lower),
+        metadata={"asset_id": _first_text(item.get("asset_id"), item.get("identifier"), item.get("id"))},
+    )
+
+
+def _asset_modality_hint(path: str) -> str | None:
+    return modality_hint_from_path(path)
 
 
 def _candidate_from_dandi(item: dict[str, object]) -> DatasetCandidate:
@@ -114,7 +149,7 @@ def _detect_regions(text: str) -> list[str]:
 
 def _detect_modalities(text: str) -> list[str]:
     modalities: list[str] = []
-    if "calcium" in text or "ophys" in text or "two-photon" in text:
+    if has_calcium_imaging_signal(text):
         modalities.append("calcium imaging")
     if "electrophysiology" in text or "neuropixels" in text or "spike" in text or "ecephys" in text:
         modalities.append("extracellular electrophysiology")
